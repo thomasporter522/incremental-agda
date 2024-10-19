@@ -3,7 +3,6 @@ open import Data.Unit
 open import Data.Bool hiding (_<_; _≟_)
 open import Data.Sum renaming (_⊎_ to _+_; inj₁ to Inl ; inj₂ to Inr) hiding (map)
 open import Data.Product hiding (map)
--- open import Relation.Unary hiding (∅; _⇒_; _⊢_)
 open import Relation.Nullary 
 open import Relation.Binary.PropositionalEquality hiding (inspect)
 open import Prelude
@@ -71,6 +70,17 @@ data AnaData : Set where
   ̸⇓ : AnaData
   ⇓ : NewType -> AnaData
 
+-- data ExpPointer : Set where 
+--   Here : ExpPointer 
+--   PFun : ExpPointer -> ExpPointer
+--   PAp1 : ExpPointer -> ExpPointer
+--   PAp2 : ExpPointer -> ExpPointer
+--   PAsc : ExpPointer -> ExpPointer
+
+-- data ExpPointerSet : Set where 
+--   P∅ : ExpPointerSet
+--   _P,_ : ExpPointer -> ExpPointerSet -> ExpPointerSet
+
 mutual 
 
   record ExpUp : Set where 
@@ -106,9 +116,31 @@ data SubsumableMid : ExpMid -> Set where
 Subsumable : ExpUp -> Set 
 Subsumable (EUp _ mid) = SubsumableMid mid
 
-data AnaStuckOnFun : AnaData -> Set where 
-  NoAnaStuck : AnaStuckOnFun ̸⇓ 
-  NMArrowStuck : ana ̸▸NArrow -> AnaStuckOnFun (⇓ ana)
+-- data AnaStuckOnFun : AnaData -> Set where 
+--   NoAnaStuck : AnaStuckOnFun ̸⇓ 
+--   NMArrowStuck : ana ̸▸NArrow -> AnaStuckOnFun (⇓ ana)
+
+-- data VarsSynthesize : ℕ -> NewType -> ExpUp -> ExpUp -> Set where 
+
+
+data VarsSynthesize : ℕ -> NewType -> ExpUp -> ExpUp -> Set where 
+  VSConst : ∀ {x t syn} ->
+    VarsSynthesize x t (EUp syn EConst) (EUp syn EConst)
+  VSHole : ∀ {x t syn} ->
+    VarsSynthesize x t (EUp syn EHole) (EUp syn EHole)
+  VSFun : ∀ {x t syn asc ana m1 m2 e e'} ->
+    VarsSynthesize (suc x) t e e' ->
+    VarsSynthesize x t (EUp syn (EFun asc m1 (ELow ana m2 e))) (EUp syn (EFun asc m1 (ELow ana m2 e')))
+  VSAp : ∀ {x t syn e1 e2 e1' e2' ana1 ana2 m1 m2 m3} ->
+    VarsSynthesize x t e1 e1' ->
+    VarsSynthesize x t e2 e2' ->
+    VarsSynthesize x t (EUp syn (EAp (ELow ana1 m1 e1) m2 (ELow ana2 m3 e2))) (EUp syn (EAp (ELow ana1 m1 e1') m2 (ELow ana2 m3 e2')))
+  VSVar : ∀ {x t syn} ->
+    VarsSynthesize x t (EUp syn (EVar x Unmarked)) (EUp (⇑ t) (EVar x Unmarked))
+  VSAsc : ∀ {x t syn asc e e' ana m} ->
+    VarsSynthesize x t e e' ->
+    VarsSynthesize x t (EUp syn (EAsc asc (ELow ana m e))) (EUp syn (EAsc asc (ELow ana m e')))
+
 
 data _L↦_ : ExpLow -> ExpLow -> Set where 
   -- NewSyn Steps
@@ -136,41 +168,53 @@ data _L↦_ : ExpLow -> ExpLow -> Set where
     ELow (⇓ (t1 , n1)) m (EUp (⇑ (t2 , n2)) e) L↦
     ELow (⇓ (t1 , Old)) Marked (EUp (⇑ (t2 , Old)) e) 
   -- Fun Steps
-  -- (Two annotation rules)
   StepAnaFun : ∀ {t t1 t2 tasc n n1 nasc m1 m2 m3 syn ana e} ->
     IsNew n ->
     (t , n) ▸NArrow (t1 , n1) , t2 ->
     tasc ~ t1 ->
     ELow (⇓ (t , n)) m1 (EUp syn (EFun (tasc , nasc) m2 (ELow ana m3 e))) L↦
-    ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Umarked (ELow (⇓ t2) m3 e)))
+    ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Unmarked (ELow (⇓ t2) m3 e)))
   StepAnaFunFail1 : ∀ {t t1 t2 tasc n n1 nasc m1 m2 m3 syn ana e} ->
     IsNew n ->
     (t , n) ▸NArrow (t1 , n1) , t2 ->
     ¬(tasc ~ t1) ->
     ELow (⇓ (t , n)) m1 (EUp syn (EFun (tasc , nasc) m2 (ELow ana m3 e))) L↦
-    ELow (⇓ (t , Old)) Umarked (EUp ̸⇑ (EFun (tasc , nasc) Marked (ELow (⇓ t2) m3 e)))
+    ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Marked (ELow (⇓ t2) m3 e)))
   StepAnaFunFail2 : ∀ {t asc n m1 m2 m3 ana e} ->
     IsNew n ->
     (t , n) ̸▸NArrow ->
     ELow (⇓ (t , n)) m1 (EUp ̸⇑ (EFun asc m2 (ELow (⇓ ana) m3 e))) L↦
-    ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun asc Umarked (ELow ̸⇓ Umarked e)))
+    ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun asc Unmarked (ELow ̸⇓ Unmarked e)))
   StepNoAnaFun : ∀ {asc m1 m2 ana e} ->
     ELow ̸⇓ Unmarked (EUp ̸⇑ (EFun asc m1 (ELow (⇓ ana) m2 e))) L↦
     ELow ̸⇓ Unmarked (EUp ̸⇑ (EFun asc m1 (ELow ̸⇓ Unmarked e)))
-  StepNewSynFun1 : 
-    IsNew n2 ->
-    ELow ana m (EUp ̸⇑ (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e)))) L↦
-    ELow ana m (EUp (⇑ (TArrow t1 t2 , New)) (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e))))
-  StepNewSynFun2 : 
-    IsNew n2 ->
-    syn ▸NArrow (oldt1 , oldn1) , (oldt2 , oldn2) ->
-    ELow ana m (EUp (⇑ syn) (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e)))) L↦
-    ELow ana m (EUp (⇑ (TArrow oldt1 t2 , NArrow oldn1 n2)) (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e))))
-  StepVoidSynFun :  
-    ELow ana m (EUp ̸⇑ (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e)))) L↦
-    ELow ana m (EUp (⇑ (TArrow t1 t2 , New)) (EFun (t1 , n1) Umarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e))))
 
 data _U↦_ : ExpUp -> ExpUp -> Set where 
+  -- Fun Steps
+  -- (Two annotation rules)
+  StepNewAnnFun1 : ∀ {t1 n1 m t2 n2 e e'} ->
+    IsNew n1 ->
+    VarsSynthesize 0 (t1 , n1) (EUp (⇑ (t2 , n2)) e) e' ->
+    EUp ̸⇑ (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e))) U↦
+    EUp (⇑ (TArrow t1 t2 , New)) (EFun (t1 , Old) Unmarked (ELow ̸⇓ m e'))
+  StepNewAnnFun2 :  ∀ {syn oldt1 oldt2 oldn1 oldn2 t1 n1 m t2 n2 e e'} ->
+    IsNew n2 ->
+    syn ▸NArrow (oldt1 , oldn1) , (oldt2 , oldn2) ->
+    VarsSynthesize 0 (t1 , n1) (EUp (⇑ (t2 , n2)) e) e' ->
+    EUp (⇑ syn) (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e))) U↦
+    EUp (⇑ (TArrow t1 oldt2 , NArrow n1 oldn2)) (EFun (t1 , Old) Unmarked (ELow ̸⇓ m e'))
+  StepNewSynFun1 : ∀ {t1 n1 m t2 n2 e} ->
+    IsNew n2 ->
+    EUp ̸⇑ (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e))) U↦
+    EUp (⇑ (TArrow t1 t2 , New)) (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e)))
+  StepNewSynFun2 : ∀ {syn oldt1 oldt2 oldn1 oldn2 t1 n1 m t2 n2 e} ->
+    IsNew n2 ->
+    syn ▸NArrow (oldt1 , oldn1) , (oldt2 , oldn2) ->
+    EUp (⇑ syn) (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e))) U↦
+    EUp (⇑ (TArrow oldt1 t2 , NArrow oldn1 n2)) (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e)))
+  StepVoidSynFun : ∀ {t1 n1 m t2 n2 e} ->
+    EUp ̸⇑ (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , n2)) e))) U↦
+    EUp (⇑ (TArrow t1 t2 , New)) (EFun (t1 , n1) Unmarked (ELow ̸⇓ m (EUp (⇑ (t2 , Old)) e)))
   -- Ap Step
   StepAp : ∀ {t n t1 t2 syn ana e1 e2 m1 m2} ->
     IsNew n ->
