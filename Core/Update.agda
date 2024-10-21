@@ -7,214 +7,9 @@ open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality hiding (inspect)
 open import Prelude
 
+open import Core.Core
+
 module Core.Update where
-
-data Type : Set where 
-  TBase : Type 
-  THole : Type
-  TArrow : Type -> Type -> Type 
-
-data BareExp : Set where 
-  BareEConst : BareExp 
-  BareEHole : BareExp
-  BareEFun : Type -> BareExp -> BareExp 
-  BareEAp : BareExp -> BareExp -> BareExp 
-  BareEVar : ℕ -> BareExp 
-  BareEAsc : Type -> BareExp -> BareExp 
-
-data BareSubsumable : BareExp -> Set where 
-  BareSubsumableConst : BareSubsumable BareEConst
-  BareSubsumableHole : BareSubsumable BareEHole
-  BareSubsumableAp : ∀ {e1 e2} → BareSubsumable (BareEAp e1 e2) 
-  BareSubsumableVar : ∀ {x} → BareSubsumable (BareEVar x) 
-  BareSubsumableAsc : ∀ {t e} → BareSubsumable (BareEAsc t e) 
-
-data Newness : Set where 
-  Old : Newness 
-  New : Newness 
-  -- NBase : Newness 
-  -- NHole : Newness
-  NArrow : Newness -> Newness -> Newness 
-
-data IsNew : Newness -> Set where 
-  IsNewNew : IsNew New
-  IsNewArrow : ∀ {n1 n2} → IsNew (NArrow n1 n2)
-
-data _~_ : Type -> Type -> Set where 
-  ConsistBase : TBase ~ TBase
-  ConsistHole1 : ∀ {t} → t ~ THole
-  ConsistHole2 : ∀ {t} → THole ~ t
-  ConsistArr : ∀ {t1 t2 t3 t4} → t1 ~ t3 → t2 ~ t4 → (TArrow t1 t2) ~ (TArrow t3 t4)
-
-data _▸TArrow_,_ : Type -> Type -> Type -> Set where 
-  MArrowHole : THole ▸TArrow THole , THole
-  MArrowArrow : ∀ {t1 t2} → (TArrow t1 t2) ▸TArrow t1 , t2
-
-data _̸▸TArrow : Type -> Set where 
-  MArrowBase : TBase ̸▸TArrow
-
-data _▸NArrow_,_ : Newness -> Newness -> Newness -> Set where 
-  MNArrowOld : Old ▸NArrow Old , Old
-  MNArrowNew : New ▸NArrow New , New
-  MNArrowArrow : ∀ {n1 n2} → (NArrow n1 n2) ▸NArrow n1 , n2
-
-narrow : Newness -> Newness -> Newness 
-narrow Old Old = Old 
-narrow New New = New 
-narrow n1 n2 = NArrow n1 n2
-
-NewType : Set 
-NewType = (Type × Newness) 
-
-
-data MarkData : Set where 
-  Marked : MarkData
-  Unmarked : MarkData
-
-data SynData : Set where 
-  ̸⇑ : SynData
-  ⇑ : NewType -> SynData
-
-data AnaData : Set where 
-  ̸⇓ : AnaData
-  ⇓ : NewType -> AnaData
-
--- data ExpPointer : Set where 
---   Here : ExpPointer 
---   PFun : ExpPointer -> ExpPointer
---   PAp1 : ExpPointer -> ExpPointer
---   PAp2 : ExpPointer -> ExpPointer
---   PAsc : ExpPointer -> ExpPointer
-
--- data ExpPointerSet : Set where 
---   P∅ : ExpPointerSet
---   _P,_ : ExpPointer -> ExpPointerSet -> ExpPointerSet
-
-mutual 
-
-  record ExpUp : Set where 
-    inductive 
-    constructor EUp
-    field 
-      syn : SynData
-      mid : ExpMid
-
-  data ExpMid : Set where 
-    EConst : ExpMid 
-    EHole : ExpMid
-    EFun : NewType -> MarkData -> ExpLow -> ExpMid 
-    EAp : ExpLow -> MarkData -> ExpLow -> ExpMid 
-    EVar : ℕ -> MarkData -> ExpMid 
-    EAsc : NewType -> ExpLow -> ExpMid 
-
-  record ExpLow : Set where 
-    inductive
-    constructor ELow
-    field 
-      ana : AnaData
-      mark : MarkData
-      child : ExpUp
-
-data BarrenExp : ExpUp -> BareExp -> Set where 
-  BarrenConst : ∀ {syn} → 
-    BarrenExp (EUp syn EConst) BareEConst
-  BarrenHole : ∀ {syn} → 
-    BarrenExp (EUp syn EConst) BareEHole
-  BarrenFun : ∀ {syn ana asc n m1 m2 e b} → 
-    BarrenExp e b ->
-    BarrenExp (EUp syn (EFun (asc , n) m1 (ELow ana m2 e))) (BareEFun asc b)
-  BarrenAp : ∀ {syn ana1 ana2 m1 m2 m3 e1 e2 b1 b2} → 
-    BarrenExp e1 b1 ->
-    BarrenExp e2 b2 ->
-    BarrenExp (EUp syn (EAp (ELow ana1 m1 e1) m2 (ELow ana2 m3 e2))) (BareEAp b1 b2)
-  BarrenVar : ∀ {syn x m} → 
-    BarrenExp (EUp syn (EVar x m)) (BareEVar x)
-  BarrenAsc : ∀ {syn ana asc n m e b} → 
-    BarrenExp e b ->
-    BarrenExp (EUp syn (EAsc (asc , n) (ELow ana m e))) (BareEAsc asc b)
-
-data Context (A : Set) : Set where 
-  ∅ : Context A
-  _,_ : A -> Context A -> Context A
-  
-data _,_∈_ {A : Set} : ℕ → A → (Context A) → Set where 
-  InCtx0 : ∀ {Γ t} -> 0 , t ∈ (t , Γ)
-  InCtxSuc : ∀ {Γ t t' n} -> (n , t ∈ Γ) -> (suc n , t ∈ (t' , Γ))
-
-_̸∈_ : ∀ {A} -> ℕ → (Context A) → Set
-x ̸∈ Γ = ∀ {t} -> ¬(x , t ∈ Γ)
-
-BareCtx : Set 
-BareCtx = Context Type
-
-mutual 
-  data _⊢_~>_⇒_ : (Γ : BareCtx) (b : BareExp) (e : ExpUp) (t : Type) → Set where 
-    MarkConst : ∀ {Γ} →
-      Γ ⊢ BareEConst ~> (EUp (⇑ (TBase , Old)) EConst) ⇒ TBase
-    MarkHole : ∀ {Γ} →
-      Γ ⊢ BareEHole ~> (EUp (⇑ (THole , Old)) EHole) ⇒ THole
-    MarkSynFun : ∀ {Γ t1 t2 b e} ->
-      (t1 , Γ) ⊢ b ~> e ⇒ t2 ->
-      Γ ⊢ (BareEFun t1 b) ~> (EUp (⇑ (TArrow t1 t2 , Old)) (EFun (t1 , Old) Unmarked (ELow ̸⇓ Unmarked e))) ⇒ (TArrow t1 t2)
-    MarkAp : ∀ {Γ  b1 b2 e1 e2 t t1 t2} ->
-      Γ ⊢ b1 ~> e1 ⇒ t ->
-      t ▸TArrow t1 , t2 ->
-      Γ ⊢ b2 ~> e2 ⇐ t1 ->
-      Γ ⊢ (BareEAp b1 b2) ~> (EUp (⇑ (t2 , Old)) (EAp (ELow ̸⇓ Unmarked e1) Unmarked e2)) ⇒ t2
-    MarkVar : ∀ {Γ x t} ->
-      x , t ∈ Γ ->
-      Γ ⊢ (BareEVar x) ~> (EUp (⇑ (t , Old)) (EVar x Unmarked)) ⇒ t
-    MarkVarFail : ∀ {Γ x} ->
-      x ̸∈ Γ ->
-      Γ ⊢ (BareEVar x) ~> (EUp (⇑ (THole , Old)) (EVar x Marked)) ⇒ THole
-    MarkAsc : ∀ {Γ b t e} ->
-      Γ ⊢ b ~> e ⇐ t ->
-      Γ ⊢ (BareEAsc t b) ~> (EUp (⇑ (t , Old)) (EAsc (t , Old) e)) ⇒ t
-
-  data _⊢_~>_⇐_ : (Γ : BareCtx) (b : BareExp) (e : ExpLow) (t : Type) → Set where  
-    MarkSubsume : ∀ {Γ b e t1 t2} ->
-      Γ ⊢ b ~> e ⇒ t1 ->
-      BareSubsumable b ->
-      (t1 ~ t2) ->
-      Γ ⊢ b ~> (ELow (⇓ (t2 , Old)) Unmarked e) ⇐ t2
-    MarkSubsumeFail : ∀ {Γ b e t1 t2} ->
-      Γ ⊢ b ~> e ⇒ t1 ->
-      BareSubsumable b ->
-      ¬(t1 ~ t2) ->
-      Γ ⊢ b ~> (ELow (⇓ (t2 , Old)) Marked e) ⇐ t2
-    MarkAnaFun : ∀ {Γ t t1 t2 tasc b e} ->
-      t ▸TArrow t1 , t2 ->
-      (tasc , Γ) ⊢ b ~> e ⇐ t2 ->
-      (tasc ~ t1) ->
-      Γ ⊢ (BareEFun tasc b) ~> (ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun (tasc , Old) Unmarked e))) ⇐ t
-    MarkAnaFunFail1 : ∀ {Γ t t1 t2 tasc b e} ->
-      t ▸TArrow t1 , t2 ->
-      (tasc , Γ) ⊢ b ~> e ⇐ t2 ->
-      ¬(tasc ~ t1) ->
-      Γ ⊢ (BareEFun tasc b) ~> (ELow (⇓ (t , Old)) Unmarked (EUp ̸⇑ (EFun (tasc , Old) Marked e))) ⇐ t
-    -- Paper version: analyzes the body against ? if the lambda analyzed against non-arrow
-    -- My version:
-    MarkAnaFunFail2 : ∀ {Γ t t1 t2 b e} ->
-      t ̸▸TArrow ->
-      (t1 , Γ) ⊢ b ~> e ⇒ t2 ->
-      Γ ⊢ (BareEFun t1 b) ~> (ELow (⇓ (t , Old)) Marked (EUp (⇑ (TArrow t1 t2 , Old)) (EFun (t1 , Old) Unmarked (ELow ̸⇓ Unmarked e)))) ⇐ t
-
-data SubsumableMid : ExpMid -> Set where 
-  SubsumableConst : SubsumableMid EConst
-  SubsumableHole : SubsumableMid EHole
-  SubsumableAp : ∀ {e1 m e2} → SubsumableMid (EAp e1 m e2) 
-  SubsumableVar : ∀ {x m} → SubsumableMid (EVar x m) 
-  SubsumableAsc : ∀ {t e} → SubsumableMid (EAsc t e) 
-
-Subsumable : ExpUp -> Set 
-Subsumable (EUp _ mid) = SubsumableMid mid
-
--- data AnaStuckOnFun : AnaData -> Set where 
---   NoAnaStuck : AnaStuckOnFun ̸⇓ 
---   NMArrowStuck : ana ̸▸NArrow -> AnaStuckOnFun (⇓ ana)
-
--- data VarsSynthesize : ℕ -> NewType -> ExpUp -> ExpUp -> Set where 
-
 
 data VarsSynthesize : ℕ -> NewType -> ExpUp -> ExpUp -> Set where 
   VSConst : ∀ {x t syn} ->
@@ -233,7 +28,6 @@ data VarsSynthesize : ℕ -> NewType -> ExpUp -> ExpUp -> Set where
   VSAsc : ∀ {x t syn asc e e' ana m} ->
     VarsSynthesize x t e e' ->
     VarsSynthesize x t (EUp syn (EAsc asc (ELow ana m e))) (EUp syn (EAsc asc (ELow ana m e')))
-
 
 data _L↦_ : ExpLow -> ExpLow -> Set where 
   -- NewSyn Steps
@@ -325,131 +119,101 @@ data _U↦_ : ExpUp -> ExpUp -> Set where
     EUp syn (EAsc (t , n) (ELow ana m e)) U↦
     EUp (⇑ (t , n)) (EAsc (t , Old) (ELow (⇓ (t , n)) m e))
 
+mutual 
 
-Ctx : Set 
-Ctx = Context NewType
+  data LEnvUp : Set where 
+    LEnvUpRec : SynData -> LEnvMid -> LEnvUp
 
--- MergeInfo (t1 , n1) (t2 , n2) (t3 , n3) holds with:
--- (t1 , n1) is the stored info
--- (t2 , n2) is the calculated true info 
--- (t3 , n3) is the info that should be passed along
--- and ensures that the stored info is compatible with the real info.
--- This is the case when t1 and t2 are the same at the points where n2 is old. 
--- Where n2 is all new, the "real" info hasn't been propagated yet and doesn't 
--- need to have been stored already. It doesn't matter whether n1 is new or old. 
+  data LEnvMid : Set where 
+    LEnvFun : NewType -> MarkData -> LEnvLow -> LEnvMid 
+    LEnvAp1 : LEnvLow -> MarkData -> ExpLow -> LEnvMid 
+    LEnvAp2 : ExpLow -> MarkData -> LEnvLow -> LEnvMid 
+    LEnvAsc : NewType -> LEnvLow -> LEnvMid 
 
-data MergeInfo : NewType -> NewType -> NewType -> Set where 
-  MergeInfoNew : ∀ {t1 t2 n1} -> 
-    MergeInfo (t1 , n1) (t2 , New) (t2 , New)
-  MergeInfoOld : ∀ {t1 n1} -> 
-    MergeInfo (t1 , n1) (t1 , Old) (t1 , n1)
-  MergeInfoArrow : ∀ {t1 t2 t3 t4 t5 t6 n n1 n2 n3 n4 n5 n6} -> 
-    n ▸NArrow n1 , n2 ->
-    MergeInfo (t1 , n1) (t3 , n3) (t5 , n5) ->
-    MergeInfo (t2 , n2) (t4 , n4) (t6 , n6) ->
-    MergeInfo (TArrow t1 t2 , n) (TArrow t3 t4 , NArrow n3 n4) (TArrow t5 t6 , narrow n5 n6)
+  data LEnvLow : Set where 
+    L⊙ : LEnvLow
+    LEnvLowRec : AnaData -> MarkData -> LEnvUp -> LEnvLow
 
 mutual 
-  data _⊢_⇒_ : (Γ : Ctx) (e : ExpUp) (t : NewType) → Set where 
-    SynConst : ∀ {Γ info syn} ->
-      MergeInfo info (TBase , Old) syn -> 
-      Γ ⊢ (EUp (⇑ info) EConst) ⇒ syn
-    SynHole : ∀ {Γ info syn} ->
-      MergeInfo info (THole , Old) syn -> 
-      Γ ⊢ (EUp (⇑ info) EHole) ⇒ syn
-    SynFun : ∀ {Γ info t1 t2 n1 n2 syn e} ->
-      ((t1 , n1) , Γ) ⊢ e ⇒ (t2 , n2) ->
-      MergeInfo info (TArrow t1 t2 , narrow n1 n2) syn -> 
-      Γ ⊢ (EUp (⇑ info) (EFun (t1 , n1) Unmarked (ELow ̸⇓ Unmarked e))) ⇒ syn
-    SynFunVoid : ∀ {Γ t1 t2 n1 n2 ana e} ->
-      ((t1 , n1) , Γ) ⊢ e ⇒ (t2 , n2) ->
-      Γ ⊢ (EUp ̸⇑ (EFun (t1 , n1) Unmarked (ELow ana Unmarked e))) ⇒ (TArrow t1 t2 , New)
-    SynAp : ∀ {Γ info t t1 t2 n n1 n2 e1 e2 syn} ->
-      Γ ⊢ e1 ⇒ (t , n) ->
-      t ▸TArrow t1 , t2 ->
-      n ▸NArrow n1 , n2 ->
-      Γ ⊢ e2 ⇐ (t1 , n1) ->
-      MergeInfo info (t2 , n2) syn -> 
-      Γ ⊢ (EUp (⇑ info) (EAp (ELow ̸⇓ Unmarked e1) Unmarked e2)) ⇒ syn
-    SynVar : ∀ {Γ info x t syn} ->
-      x , t ∈ Γ ->
-      MergeInfo info t syn -> 
-      Γ ⊢ (EUp (⇑ info) (EVar x Unmarked)) ⇒ syn
-    SynVarFail : ∀ {Γ info x syn} ->
-      x ̸∈ Γ ->
-      MergeInfo info (THole , Old) syn -> 
-      Γ ⊢ (EUp (⇑ info) (EVar x Marked)) ⇒ syn
-    SynAsc : ∀ {Γ info t e syn} ->
-      Γ ⊢ e ⇐ t ->
-      MergeInfo info t syn -> 
-      Γ ⊢ (EUp (⇑ info) (EAsc t e)) ⇒ syn
 
-  data _⊢_⇐_ : (Γ : Ctx) (e : ExpLow) (t : NewType) → Set where 
-    AnaSubsume : ∀ {Γ info ana t1 t2 n1 n2 e} ->
-      MergeInfo info ana (t2 , n2) -> 
-      Γ ⊢ e ⇒ (t1 , n1) ->
-      Subsumable e ->
-      (t1 ~ t2) ->
-      Γ ⊢ (ELow (⇓ info) Unmarked e) ⇐ ana
-    AnaSubsumeFail : ∀ {Γ info ana t1 t2 n1 n2 e} ->
-      MergeInfo info ana (t2 , n2) -> 
-      Γ ⊢ e ⇒ (t1 , n1) ->
-      Subsumable e ->
-      ¬(t1 ~ t2) ->
-      Γ ⊢ (ELow (⇓ info) Marked e) ⇐ ana
-    AnaFun : ∀ {Γ info ana t t1 t2 n n1 n2 tasc nasc e} ->
-      MergeInfo info ana (t , n) -> 
-      t ▸TArrow t1 , t2 ->
-      n ▸NArrow n1 , n2 ->
-      ((tasc , nasc) , Γ) ⊢ e ⇐ (t2 , n2) ->
-      (tasc ~ t1) ->
-      Γ ⊢ (ELow (⇓ info) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Unmarked e))) ⇐ ana
-    AnaFunFail1 : ∀ {Γ info ana t t1 t2 n n1 n2 tasc nasc e} ->
-      MergeInfo info ana (t , n) -> 
-      t ▸TArrow t1 , t2 ->
-      n ▸NArrow n1 , n2 ->
-      ((tasc , nasc) , Γ) ⊢ e ⇐ (t2 , n2) ->
-      ¬(tasc ~ t1) ->
-      Γ ⊢ (ELow (⇓ info) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Marked e))) ⇐ ana
-    AnaFunFail2 : ∀ {Γ syn-info ana-info syn-info' ana syn t tasc n nasc e} ->
-      MergeInfo ana-info ana (t , n) -> 
-      t ̸▸TArrow ->
-      ((tasc , nasc) , Γ) ⊢ e ⇒ syn ->
-      MergeInfo syn-info syn syn-info' -> 
-      Γ ⊢ (ELow (⇓ ana-info) Marked (EUp (⇑ syn-info) (EFun (tasc , nasc) Unmarked (ELow ̸⇓ Unmarked e)))) ⇐ ana
+  data UEnvUp : Set where 
+    U⊙ : UEnvUp
+    UEnvUpRec : SynData -> UEnvMid -> UEnvUp
 
+  data UEnvMid : Set where 
+    UEnvFun : NewType -> MarkData -> UEnvLow -> UEnvMid 
+    UEnvAp1 : UEnvLow -> MarkData -> ExpLow -> UEnvMid 
+    UEnvAp2 : ExpLow -> MarkData -> UEnvLow -> UEnvMid 
+    UEnvAsc : NewType -> UEnvLow -> UEnvMid 
 
-data Settled : ExpUp -> Set where 
-  SettledConst : ∀ {t} ->
-    Settled (EUp (⇑ (t , Old)) EConst)
-  SettledHole : ∀ {t} ->
-    Settled (EUp (⇑ (t , Old)) EHole)
-  SettledFunSyn : ∀ {t1 t2 m1 m2 e} ->
-    Settled (EUp (⇑ (t1 , Old)) (EFun (t2 , Old) m1 (ELow ̸⇓ m2 e)))
-  SettledFunAna : ∀ {t1 t2 m1 m2 e} ->
-    Settled (EUp ̸⇑ (EFun (t1 , Old) m1 (ELow (⇓ (t2 , Old)) m2 e)))
-  SettledAp : ∀ {t1 t2 m1 m2 m3 e1 e2} ->
-    Settled e1 -> 
-    Settled e2 -> 
-    Settled (EUp (⇑ (t1 , Old)) (EAp (ELow ̸⇓ m1 e1) m2 (ELow (⇓ (t2 , Old)) m3 e2)))
-  SettledVar : ∀ {t x m} ->
-    Settled (EUp (⇑ (t , Old)) (EVar x m))
-  SettledAsc : ∀ {t1 t2 t3 m e} ->
-    Settled e -> 
-    Settled (EUp (⇑ (t1 , Old)) (EAsc (t2 , Old) (ELow (⇓ (t3 , Old)) m e)))
+  data UEnvLow : Set where 
+    UEnvLowRec : AnaData -> MarkData -> UEnvUp -> UEnvLow
 
- 
- -- (Well-formed predicate)
- -- Well-typed predicate
- -- Settled predicate
- -- Marked exp -> bare exp
- -- Bare exp -> marked exp (from scratch marking)
+mutual 
+  data _L⟦_⟧Up==_ : (ε : LEnvUp) (e : ExpLow) (e' : ExpUp)  → Set where
+    FillLEnvUpRec : ∀ {e ε e' syn} ->
+      ε L⟦ e ⟧Mid== e' ->
+      (LEnvUpRec syn ε) L⟦ e ⟧Up== (EUp syn e')
 
- -- Actions and update steps preserve well-typedness
- -- Settled, well-typed -> agrees with from-scratch
- -- Either settled or can step 
- -- Termination :)
+  data _L⟦_⟧Mid==_ : (ε : LEnvMid) (e : ExpLow) (e' : ExpMid)  → Set where
+    FillLEnvFun : ∀ {e ε e' t m} ->
+      ε L⟦ e ⟧Low== e' ->
+      (LEnvFun t m ε) L⟦ e ⟧Mid== (EFun t m e')
+    FillLEnvAp1 : ∀ {e ε e' e2 m} ->
+      ε L⟦ e ⟧Low== e' ->
+      (LEnvAp1 ε m e2) L⟦ e ⟧Mid== (EAp e' m e2)
+    FillLEnvAp2 : ∀ {e ε e' e1 m} ->
+      ε L⟦ e ⟧Low== e' ->
+      (LEnvAp2 e1 m ε) L⟦ e ⟧Mid== (EAp e1 m e')
+    FillLEnvAsc : ∀ {e ε e' t} ->
+      ε L⟦ e ⟧Low== e' ->
+      (LEnvAsc t ε) L⟦ e ⟧Mid== (EAsc t e')
 
- -- Now the original big theorem follows from action commutativity
- -- Which I don't even know how I'd express honestly
- -- So maybe I just leave it to the above. 
+  data _L⟦_⟧Low==_ : (ε : LEnvLow) (e : ExpLow) (e' : ExpLow)  → Set where
+    FillL⊙ : ∀ {e} ->
+      L⊙ L⟦ e ⟧Low== e
+    FillLEnvLowRec : ∀ {e e' ana m ε} ->
+      ε L⟦ e ⟧Up== e' ->
+      LEnvLowRec ana m ε L⟦ e ⟧Low== (ELow ana m e')
+
+mutual 
+  data _U⟦_⟧Up==_ : (ε : UEnvUp) (e : ExpUp) (e' : ExpUp)  → Set where
+    FillU⊙ : ∀ {e} ->
+      U⊙ U⟦ e ⟧Up== e
+    FillUEnvUpRec : ∀ {e ε e' syn} ->
+      ε U⟦ e ⟧Mid== e' ->
+      (UEnvUpRec syn ε) U⟦ e ⟧Up== (EUp syn e')
+
+  data _U⟦_⟧Mid==_ : (ε : UEnvMid) (e : ExpUp) (e' : ExpMid)  → Set where
+    FillUEnvFun : ∀ {e ε e' t m} ->
+      ε U⟦ e ⟧Low== e' ->
+      (UEnvFun t m ε) U⟦ e ⟧Mid== (EFun t m e')
+    FillUEnvAp1 : ∀ {e ε e' e2 m} ->
+      ε U⟦ e ⟧Low== e' ->
+      (UEnvAp1 ε m e2) U⟦ e ⟧Mid== (EAp e' m e2)
+    FillUEnvAp2 : ∀ {e ε e' e1 m} ->
+      ε U⟦ e ⟧Low== e' ->
+      (UEnvAp2 e1 m ε) U⟦ e ⟧Mid== (EAp e1 m e')
+    FillUEnvAsc : ∀ {e ε e' t} ->
+      ε U⟦ e ⟧Low== e' ->
+      (UEnvAsc t ε) U⟦ e ⟧Mid== (EAsc t e')
+
+  data _U⟦_⟧Low==_ : (ε : UEnvLow) (e : ExpUp) (e' : ExpLow)  → Set where
+    FillUEnvLowRec : ∀ {e e' ana m ε} ->
+      ε U⟦ e ⟧Up== e' ->
+      UEnvLowRec ana m ε U⟦ e ⟧Low== (ELow ana m e')
+
+data _↦_ : (e e' : ExpUp) → Set where
+  StepUp : ∀{ε e e' e-in e-in'} →
+    ε U⟦ e-in ⟧Up== e →
+    e-in U↦ e-in' →
+    ε U⟦ e-in' ⟧Up== e' →
+    e ↦ e'
+  StepLow : ∀{ε e e' e-in e-in'} →
+    ε L⟦ e-in ⟧Up== e →
+    e-in L↦ e-in' →
+    ε L⟦ e-in' ⟧Up== e' →
+    e ↦ e'
+  StepDone : ∀{t n e} →
+    IsNew n ->
+    (EUp (⇑ (t , n)) e) ↦ (EUp (⇑ (t , Old)) e)
