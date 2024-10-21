@@ -253,11 +253,12 @@ x ̸∈ Γ = ∀{t} -> ¬(x , t ∈ Γ)
 -- This is the case when t1 and t2 are the same at the points where n2 is old. 
 -- Where n2 is all new, the "real" info hasn't been propagated yet and doesn't 
 -- need to have been stored already. It doesn't matter whether n1 is new or old. 
--- The passed along info is the 
 
 data MergeInfo : NewType -> NewType -> NewType -> Set where 
-  MergeInfoNew : ∀{t1 t2 n1} -> MergeInfo (t1 , n1) (t2 , New) (t2 , New)
-  MergeInfoOld : ∀{t1 n1} -> MergeInfo (t1 , n1) (t1 , Old) (t1 , n1)
+  MergeInfoNew : ∀{t1 t2 n1} -> 
+    MergeInfo (t1 , n1) (t2 , New) (t2 , New)
+  MergeInfoOld : ∀{t1 n1} -> 
+    MergeInfo (t1 , n1) (t1 , Old) (t1 , n1)
   MergeInfoArrow : ∀{t1 t2 t3 t4 t5 t6 n n1 n2 n3 n4 n5 n6} -> 
     n ▸NArrow n1 , n2 ->
     MergeInfo (t1 , n1) (t3 , n3) (t5 , n5) ->
@@ -276,6 +277,9 @@ mutual
       ((t1 , n1) , Γ) ⊢ e ⇒ (t2 , n2) ->
       MergeInfo info (TArrow t1 t2 , narrow n1 n2) syn -> 
       Γ ⊢ (EUp (⇑ info) (EFun (t1 , n1) Unmarked (ELow ̸⇓ Unmarked e))) ⇒ syn
+    SynFunVoid : ∀{Γ t1 t2 n1 n2 ana e} ->
+      ((t1 , n1) , Γ) ⊢ e ⇒ (t2 , n2) ->
+      Γ ⊢ (EUp ̸⇑ (EFun (t1 , n1) Unmarked (ELow ana Unmarked e))) ⇒ (TArrow t1 t2 , New)
     SynAp : ∀{Γ info t t1 t2 n n1 n2 e1 e2 syn} ->
       Γ ⊢ e1 ⇒ (t , n) ->
       t ▸TArrow t1 , t2 ->
@@ -314,7 +318,7 @@ mutual
       t ▸TArrow t1 , t2 ->
       n ▸NArrow n1 , n2 ->
       ((tasc , nasc) , Γ) ⊢ e ⇐ (t2 , n2) ->
-      tasc ~ t1 ->
+      (tasc ~ t1) ->
       Γ ⊢ (ELow (⇓ info) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Unmarked e))) ⇐ ana
     AnaFunFail1 : ∀{Γ info ana t t1 t2 n n1 n2 tasc nasc e} ->
       MergeInfo info ana (t , n) -> 
@@ -323,11 +327,7 @@ mutual
       ((tasc , nasc) , Γ) ⊢ e ⇐ (t2 , n2) ->
       ¬(tasc ~ t1) ->
       Γ ⊢ (ELow (⇓ info) Unmarked (EUp ̸⇑ (EFun (tasc , nasc) Marked e))) ⇐ ana
-    -- Paper version:
-    -- AnaFunFail2 : ∀{Γ bt t tasc btasc e} ->
-    --   t ̸▸Arrow ->
-    --   (tasc , Γ) ⊢ e ⇐ THole ->
-    --   Γ ⊢ (ELow (⇓ (TOld t)) Unmarked (EUp ̸⇑ (EFun (TOld tasc) Marked e))) ⇐ t
+    -- Paper version: analyzes the body against ? if the lambda analyzed against non-arrow
     -- My version:
     AnaFunFail2 : ∀{Γ syn-info ana-info syn-info' ana syn t tasc n nasc e} ->
       MergeInfo ana-info ana (t , n) -> 
@@ -335,4 +335,39 @@ mutual
       ((tasc , nasc) , Γ) ⊢ e ⇒ syn ->
       MergeInfo syn-info syn syn-info' -> 
       Γ ⊢ (ELow (⇓ ana-info) Marked (EUp (⇑ syn-info) (EFun (tasc , nasc) Unmarked (ELow ̸⇓ Unmarked e)))) ⇐ ana
+
+
+data Settled : ExpUp -> Set where 
+  SettledConst : ∀{t} ->
+    Settled (EUp (⇑ (t , Old)) EConst)
+  SettledHole : ∀{t} ->
+    Settled (EUp (⇑ (t , Old)) EHole)
+  SettledFunSyn : ∀{t1 t2 m1 m2 e} ->
+    Settled (EUp (⇑ (t1 , Old)) (EFun (t2 , Old) m1 (ELow ̸⇓ m2 e)))
+  SettledFunAna : ∀{t1 t2 m1 m2 e} ->
+    Settled (EUp ̸⇑ (EFun (t1 , Old) m1 (ELow (⇓ (t2 , Old)) m2 e)))
+  SettledAp : ∀{t1 t2 m1 m2 m3 e1 e2} ->
+    Settled e1 -> 
+    Settled e2 -> 
+    Settled (EUp (⇑ (t1 , Old)) (EAp (ELow ̸⇓ m1 e1) m2 (ELow (⇓ (t2 , Old)) m3 e2)))
+  SettledVar : ∀{t x m} ->
+    Settled (EUp (⇑ (t , Old)) (EVar x m))
+  SettledAsc : ∀{t1 t2 t3 m e} ->
+    Settled e -> 
+    Settled (EUp (⇑ (t1 , Old)) (EAsc (t2 , Old) (ELow (⇓ (t3 , Old)) m e)))
+
  
+ -- (Well-formed predicate)
+ -- Well-typed predicate
+ -- Settled predicate
+ -- Marked exp -> bare exp
+ -- Bare exp -> marked exp (from scratch marking)
+
+ -- Actions and update steps preserve well-typedness
+ -- Settled, well-typed -> agrees with from-scratch
+ -- Either settled or can step 
+ -- Termination :)
+
+ -- Now the original big theorem follows from action commutativity
+ -- Which I don't even know how I'd express honestly
+ -- So maybe I just leave it to the above. 
