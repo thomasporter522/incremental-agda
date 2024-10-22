@@ -80,7 +80,6 @@ data _L↦_ : ExpLow -> ExpLow -> Set where
 
 data _U↦_ : ExpUp -> ExpUp -> Set where 
   -- Fun Steps
-  -- (Two annotation rules)
   StepNewAnnFun1 : ∀ {t1 n1 m t2 n2 e e'} ->
     IsNew n1 ->
     VarsSynthesize 0 (t1 , n1) (EUp (⇑ (t2 , n2)) e) e' ->
@@ -150,12 +149,12 @@ mutual
     UEnvLowRec : AnaData -> MarkData -> UEnvUp -> UEnvLow
 
 mutual 
-  data _L⟦_⟧Up==_ : (ε : LEnvUp) (e : ExpLow) (e' : ExpUp)  → Set where
+  data _L⟦_⟧Up==_ : (ε : LEnvUp) (e : ExpLow) (e' : ExpUp)  -> Set where
     FillLEnvUpRec : ∀ {e ε e' syn} ->
       ε L⟦ e ⟧Mid== e' ->
       (LEnvUpRec syn ε) L⟦ e ⟧Up== (EUp syn e')
 
-  data _L⟦_⟧Mid==_ : (ε : LEnvMid) (e : ExpLow) (e' : ExpMid)  → Set where
+  data _L⟦_⟧Mid==_ : (ε : LEnvMid) (e : ExpLow) (e' : ExpMid)  -> Set where
     FillLEnvFun : ∀ {e ε e' t m} ->
       ε L⟦ e ⟧Low== e' ->
       (LEnvFun t m ε) L⟦ e ⟧Mid== (EFun t m e')
@@ -169,7 +168,7 @@ mutual
       ε L⟦ e ⟧Low== e' ->
       (LEnvAsc t ε) L⟦ e ⟧Mid== (EAsc t e')
 
-  data _L⟦_⟧Low==_ : (ε : LEnvLow) (e : ExpLow) (e' : ExpLow)  → Set where
+  data _L⟦_⟧Low==_ : (ε : LEnvLow) (e : ExpLow) (e' : ExpLow)  -> Set where
     FillL⊙ : ∀ {e} ->
       L⊙ L⟦ e ⟧Low== e
     FillLEnvLowRec : ∀ {e e' ana m ε} ->
@@ -177,14 +176,14 @@ mutual
       LEnvLowRec ana m ε L⟦ e ⟧Low== (ELow ana m e')
 
 mutual 
-  data _U⟦_⟧Up==_ : (ε : UEnvUp) (e : ExpUp) (e' : ExpUp)  → Set where
+  data _U⟦_⟧Up==_ : (ε : UEnvUp) (e : ExpUp) (e' : ExpUp)  -> Set where
     FillU⊙ : ∀ {e} ->
       U⊙ U⟦ e ⟧Up== e
     FillUEnvUpRec : ∀ {e ε e' syn} ->
       ε U⟦ e ⟧Mid== e' ->
       (UEnvUpRec syn ε) U⟦ e ⟧Up== (EUp syn e')
 
-  data _U⟦_⟧Mid==_ : (ε : UEnvMid) (e : ExpUp) (e' : ExpMid)  → Set where
+  data _U⟦_⟧Mid==_ : (ε : UEnvMid) (e : ExpUp) (e' : ExpMid)  -> Set where
     FillUEnvFun : ∀ {e ε e' t m} ->
       ε U⟦ e ⟧Low== e' ->
       (UEnvFun t m ε) U⟦ e ⟧Mid== (EFun t m e')
@@ -198,22 +197,39 @@ mutual
       ε U⟦ e ⟧Low== e' ->
       (UEnvAsc t ε) U⟦ e ⟧Mid== (EAsc t e')
 
-  data _U⟦_⟧Low==_ : (ε : UEnvLow) (e : ExpUp) (e' : ExpLow)  → Set where
+  data _U⟦_⟧Low==_ : (ε : UEnvLow) (e : ExpUp) (e' : ExpLow)  -> Set where
     FillUEnvLowRec : ∀ {e e' ana m ε} ->
       ε U⟦ e ⟧Up== e' ->
       UEnvLowRec ana m ε U⟦ e ⟧Low== (ELow ana m e')
 
-data _↦_ : (e e' : ExpUp) → Set where
-  StepUp : ∀{ε e e' e-in e-in'} →
-    ε U⟦ e-in ⟧Up== e →
-    e-in U↦ e-in' →
-    ε U⟦ e-in' ⟧Up== e' →
-    e ↦ e'
-  StepLow : ∀{ε e e' e-in e-in'} →
-    ε L⟦ e-in ⟧Up== e →
-    e-in L↦ e-in' →
-    ε L⟦ e-in' ⟧Up== e' →
-    e ↦ e'
-  StepDone : ∀{t n e} →
+data _Up↦_ : (e e' : ExpUp) -> Set where
+  StepUp : ∀{ε e e' e-in e-in'} ->
+    ε U⟦ e-in ⟧Up== e ->
+    e-in U↦ e-in' ->
+    ε U⟦ e-in' ⟧Up== e' ->
+    e Up↦ e'
+  StepLow : ∀{ε e e' e-in e-in'} ->
+    ε L⟦ e-in ⟧Up== e ->
+    e-in L↦ e-in' ->
+    ε L⟦ e-in' ⟧Up== e' ->
+    e Up↦ e'
+
+data _Low↦_ : (e e' : ExpLow) -> Set where
+  StepUp : ∀{ε e e' e-in e-in'} ->
+    ε U⟦ e-in ⟧Low== e ->
+    e-in U↦ e-in' ->
+    ε U⟦ e-in' ⟧Low== e' ->
+    e Low↦ e'
+  StepLow : ∀{ε e e' e-in e-in'} ->
+    ε L⟦ e-in ⟧Low== e ->
+    e-in L↦ e-in' ->
+    ε L⟦ e-in' ⟧Low== e' ->
+    e Low↦ e'
+
+data _P↦_ : (e e' : Program) -> Set where
+  TopStepStep : ∀{e e'} ->
+    e Up↦ e' ->
+    (PRoot e) P↦ (PRoot e')
+  TopStepDone : ∀{t n e} ->
     IsNew n ->
-    (EUp (⇑ (t , n)) e) ↦ (EUp (⇑ (t , Old)) e)
+    (PRoot (EUp (⇑ (t , n)) e)) P↦ (PRoot (EUp (⇑ (t , Old)) e))

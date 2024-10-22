@@ -105,6 +105,9 @@ mutual
   data ExpLow : Set where 
     ELow : AnaData -> MarkData -> ExpUp -> ExpLow
 
+data Program : Set where 
+    PRoot : ExpUp -> Program
+
 data SubsumableMid : ExpMid -> Set where 
   SubsumableConst : SubsumableMid EConst
   SubsumableHole : SubsumableMid EHole
